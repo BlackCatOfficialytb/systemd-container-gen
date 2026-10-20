@@ -115,9 +115,10 @@ commands from the reminder banner in `/etc/bash.bashrc`.
 The workflow in [`.github/workflows/auto-build.yml`](.github/workflows/auto-build.yml)
 runs every Sunday at 05:30 UTC and can also be started manually from the Actions
 tab. That window is after Canonical's weekly security rebuilds have normally
-propagated to Docker Hub, while GitHub Actions is at its quietest. The workflow
-has four independent matrix jobs, one per upstream Ubuntu tag, with
-`fail-fast: false` so one failed release does not block the others.
+propagated to Docker Hub, while GitHub Actions is at its quietest. All matrix
+jobs use GitHub's `ubuntu-26.04` runner image, which is currently Ubuntu 26.04.1
+LTS. The workflow has four independent matrix jobs, one per upstream Ubuntu tag,
+with `fail-fast: false` so one failed release does not block the others.
 
 Each job avoids downloading image layers just to check for updates:
 

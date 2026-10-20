@@ -1,4 +1,4 @@
-# ubuntu-systemd
+# systemd container generator
 
 [![Build systemd images](https://github.com/BlackCatOfficialytb/systemd-container-gen/actions/workflows/auto-build.yml/badge.svg?branch=main)](https://github.com/BlackCatOfficialytb/systemd-container-gen/actions/workflows/auto-build.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/quanvm0501alt1/ubuntu-systemd)](https://hub.docker.com/r/quanvm0501alt1/ubuntu-systemd)

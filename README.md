@@ -1,8 +1,7 @@
 # ubuntu-systemd
 
-[![Build systemd images](https://github.com/quanvm0501alt1/ubuntu-systemd/actions/workflows/auto-build.yml/badge.svg?branch=main)](https://github.com/quanvm0501alt1/ubuntu-systemd/actions/workflows/auto-build.yml)
+[![Build systemd images](https://github.com/BlackCatOfficialytb/ubuntu-systemd-container-gen/actions/workflows/auto-build.yml/badge.svg?branch=main)](https://github.com/BlackCatOfficialytb/ubuntu-systemd-container-gen/actions/workflows/auto-build.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/quanvm0501alt1/ubuntu-systemd)](https://hub.docker.com/r/quanvm0501alt1/ubuntu-systemd)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 A small, automatically maintained set of Ubuntu images with `systemd` running as
 PID 1. Four upstream Ubuntu release channels are built independently and
@@ -19,7 +18,6 @@ Each tier is rebuilt only when its official Ubuntu image digest changes.
 | Stop signal | `SIGRTMIN+3` |
 | Published Docker tags | `jammy`, `22.04`, `noble`, `24.04`, `resolute`, `26.04`, `latest`, `stonking`, `26.10`, `rolling` |
 | Current build architecture | `linux/amd64` |
-| License | Apache-2.0 |
 
 The image explicitly installs only `systemd`, `systemd-sysv`, and `udev` (plus
 their required dependencies) and skips recommended packages. `getty` and
@@ -282,9 +280,3 @@ Please avoid opening public issues containing credentials or other secrets.
 - [ ] Arch Linux support using a pacman-specific template
 - [ ] Multi-architecture image manifests with native integration testing
 - [ ] SBOM generation and signed image provenance
-
-## License
-
-Copyright 2026 the ubuntu-systemd contributors.
-
-Licensed under the [Apache License, Version 2.0](LICENSE).

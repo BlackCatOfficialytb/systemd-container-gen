@@ -1,10 +1,9 @@
-# Generated at build/check time
+# Generated at render/build/test time
 /Dockerfile
-/Dockerfile.*
-!/Dockerfile.template
 /digests/
 /last_digest.txt
 /github_env.txt
+/*.tar
 
 # Python
 __pycache__/

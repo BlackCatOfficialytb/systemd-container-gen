@@ -3,51 +3,63 @@
 [![Build systemd images](https://github.com/BlackCatOfficialytb/systemd-container-gen/actions/workflows/auto-build.yml/badge.svg?branch=main)](https://github.com/BlackCatOfficialytb/systemd-container-gen/actions/workflows/auto-build.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/quanvm0501alt1/ubuntu-systemd)](https://hub.docker.com/r/quanvm0501alt1/ubuntu-systemd)
 
-A small, automatically maintained set of Ubuntu images with `systemd` running as
-PID 1. Four upstream Ubuntu release channels are built independently and
-published as
+A modular, digest-driven build system for minimal systemd containers. Each
+distribution has its own Dockerfile template and digest state, while one
+orchestrator renders the selected template and decides whether a weekly build is
+needed.
+
+Ubuntu is published to Docker Hub at
 [`quanvm0501alt1/ubuntu-systemd`](https://hub.docker.com/r/quanvm0501alt1/ubuntu-systemd).
-Each tier is rebuilt only when its official Ubuntu image digest changes.
+Debian, Fedora, and openSUSE Leap are currently **staging artifacts**: they are
+built, boot-tested, saved as image tarballs, and attached to the Actions run for
+three days. They are not pushed to Docker Hub.
 
-## Image details
+## Deployment status
 
-| Property | Value |
-| --- | --- |
-| Upstream base | Official `docker.io/library/ubuntu` tags: `jammy`, `noble`, `resolute`, `stonking` |
-| PID 1 | `/sbin/init` |
-| Stop signal | `SIGRTMIN+3` |
-| Published Docker tags | `jammy`, `22.04`, `noble`, `24.04`, `resolute`, `26.04`, `latest`, `stonking`, `26.10`, `rolling` |
-| Current build architecture | `linux/amd64` |
-
-The image explicitly installs only `systemd`, `systemd-sysv`, and `udev` (plus
-their required dependencies) and skips recommended packages. `getty` and
-virtual-console activation are disabled because this is a headless container
-image. Each container generates its own machine ID at boot.
-
-## Available tags
-
-| Docker tag | Upstream Ubuntu tag | Ubuntu version | LTS status | Pull command |
+| Distribution | Matrix targets | Local artifact image | Hub target | Status |
 | --- | --- | --- | --- | --- |
-| `jammy` | `jammy` | 22.04 | LTS | `docker pull quanvm0501alt1/ubuntu-systemd:jammy` |
-| `22.04` | `jammy` | 22.04 | LTS | `docker pull quanvm0501alt1/ubuntu-systemd:22.04` |
-| `noble` | `noble` | 24.04 | LTS | `docker pull quanvm0501alt1/ubuntu-systemd:noble` |
-| `24.04` | `noble` | 24.04 | LTS | `docker pull quanvm0501alt1/ubuntu-systemd:24.04` |
-| `resolute` | `resolute` | 26.04 | LTS | `docker pull quanvm0501alt1/ubuntu-systemd:resolute` |
-| `26.04` | `resolute` | 26.04 | LTS | `docker pull quanvm0501alt1/ubuntu-systemd:26.04` |
-| `latest` | `resolute` | 26.04 | LTS | `docker pull quanvm0501alt1/ubuntu-systemd:latest` |
-| `stonking` | `stonking` | 26.10 | Interim | `docker pull quanvm0501alt1/ubuntu-systemd:stonking` |
-| `26.10` | `stonking` | 26.10 | Interim | `docker pull quanvm0501alt1/ubuntu-systemd:26.10` |
-| `rolling` | `stonking` | 26.10 | Interim | `docker pull quanvm0501alt1/ubuntu-systemd:rolling` |
+| Ubuntu | `resolute`, `noble`, `jammy`, `stonking` | `quanvm0501alt1/ubuntu-systemd` | `quanvm0501alt1/ubuntu-systemd` | Active Hub push |
+| Debian | `trixie`, `bookworm` | `debian-systemd` | `<DOCKERHUB_USERNAME>/debian-systemd` | Staging artifact |
+| Fedora | `44`, `43`, `45` | `fedora-systemd` | `<DOCKERHUB_USERNAME>/fedora-systemd` | Staging artifact |
+| openSUSE Leap | `latest` | `opensuse-systemd` | `<DOCKERHUB_USERNAME>/opensuse-systemd` | Staging artifact |
 
-Tags in the same tier refer to the same image. `latest` intentionally follows
-the 26.04 LTS release (`resolute`), not the newest interim release. Use
-`rolling` to follow 26.10 (`stonking`).
+Staging artifacts use a placeholder Hub repository. After downloading and
+loading one, it is tagged locally as `<distro>-systemd:<tag>` so it can be run or
+retagged for a future Hub push without requiring credentials in CI.
 
-## Quick start
+## Published and target tags
+
+| Distribution | Upstream tag | Docker tags | Notes |
+| --- | --- | --- | --- |
+| Ubuntu | `resolute` | `resolute`, `26.04`, `latest` | Active Hub push; `latest` follows 26.04 LTS |
+| Ubuntu | `noble` | `noble`, `24.04` | Active Hub push; LTS |
+| Ubuntu | `jammy` | `jammy`, `22.04` | Active Hub push; LTS |
+| Ubuntu | `stonking` | `stonking`, `26.10`, `rolling` | Active Hub push; interim release |
+| Debian | `trixie` | `trixie`, `13`, `latest`, `stable` | Staging artifact |
+| Debian | `bookworm` | `bookworm`, `12`, `oldstable` | Staging artifact |
+| Fedora | `44` | `44`, `latest` | Staging artifact |
+| Fedora | `43` | `43` | Staging artifact |
+| Fedora | `45` | `45` | Staging artifact |
+| openSUSE Leap | `latest` | `leap`, `latest` | Staging artifact for Leap 16 |
+
+openSUSE Leap 16 no longer publishes the separate `systemd-sysvinit` package.
+The template installs `systemd`, which provides `/usr/lib/systemd/systemd`, and
+uses that path as the container command.
+
+## Ubuntu quick start
 
 These images are **system containers**, not application containers. They need
 access to the host cgroup hierarchy so systemd can manage services correctly.
-Replace `:latest` with any tag from the table above.
+Replace `:latest` with any published Ubuntu tag.
+
+Pull the published Ubuntu tags directly:
+
+```bash
+docker pull quanvm0501alt1/ubuntu-systemd:latest
+docker pull quanvm0501alt1/ubuntu-systemd:24.04
+docker pull quanvm0501alt1/ubuntu-systemd:22.04
+docker pull quanvm0501alt1/ubuntu-systemd:rolling
+```
 
 ### Podman
 
@@ -60,7 +72,7 @@ podman run -it --rm \
 ```
 
 `--systemd=always` configures the container mode, stop signal, and the tmpfs
-mounts systemd expects. To run it in the background instead:
+mounts systemd expects. To run it in the background:
 
 ```bash
 podman run -dit \
@@ -75,84 +87,175 @@ podman exec -it ubuntu-systemd bash
 For rootless Podman, the host must use cgroup v2 with systemd cgroup delegation;
 otherwise run Podman as root or use a properly delegated user session.
 
-### Docker
+### Docker CLI
 
 ```bash
 docker run -d \
   --name ubuntu-systemd \
   --privileged \
   --cgroupns=host \
+  --stop-signal=SIGRTMIN+3 \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
   quanvm0501alt1/ubuntu-systemd:latest
 
 docker exec -it ubuntu-systemd bash
+docker exec ubuntu-systemd systemctl is-system-running
 ```
 
-Check the systemd state and stop the container cleanly:
+`--privileged` grants the container extensive host access and is required by
+this example. Docker Desktop on macOS or Windows does not expose a Linux host
+cgroup hierarchy, so systemd containers are best run on a Linux host.
+
+### Docker Compose
+
+```yaml
+services:
+  systemd:
+    image: quanvm0501alt1/ubuntu-systemd:24.04
+    container_name: ubuntu-systemd
+    privileged: true
+    cgroup: host
+    stop_signal: SIGRTMIN+3
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+```
 
 ```bash
-docker exec ubuntu-systemd systemctl is-system-running
-docker stop ubuntu-systemd
-docker rm ubuntu-systemd
+docker compose up -d
+docker compose exec systemd bash
+docker compose down
 ```
 
-Depending on host restrictions, systemd may report `degraded` when optional
-kernel filesystems cannot be mounted inside the container. Inspect the affected
-units with `systemctl --failed`; the integration test intentionally accepts
-`degraded` as a successful boot.
+### Ansible Molecule
 
-`--privileged` is required for this Docker configuration because systemd needs
-to manage mounts and cgroups. That grants the container extensive host access;
-see [Security considerations](#security-considerations). Docker Desktop on
-macOS or Windows does not expose a Linux host cgroup hierarchy, so systemd
-containers are best run on a Linux host.
+The Docker driver can boot the published Ubuntu image as a systemd-enabled
+Molecule platform:
 
-After starting the container, opening a Bash shell displays the same run
-commands from the reminder banner in `/etc/bash.bashrc`.
+```yaml
+driver:
+  name: docker
+
+platforms:
+  - name: ubuntu-2404-systemd
+    image: quanvm0501alt1/ubuntu-systemd:24.04
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /sbin/init
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+
+provisioner:
+  name: ansible
+```
+
+Run the scenario with `molecule test`. For Debian use `/sbin/init`; Fedora and
+openSUSE use `/usr/lib/systemd/systemd`. Loaded staging images can be substituted
+in `platforms[].image` after `docker load`.
+
+## Debian, Fedora, and openSUSE staging artifacts
+
+Staging images are available from the **Artifacts** section of a successful
+workflow run. Each artifact is retained for **3 days** and contains a
+`docker save` tarball with every target tag.
+
+| Artifact name | Tarball | Loaded tags |
+| --- | --- | --- |
+| `debian-trixie-systemd` | `debian-trixie.tar` | `debian-systemd:trixie`, `:13`, `:latest`, `:stable` |
+| `debian-bookworm-systemd` | `debian-bookworm.tar` | `debian-systemd:bookworm`, `:12`, `:oldstable` |
+| `fedora-44-systemd` | `fedora-44.tar` | `fedora-systemd:44`, `:latest` |
+| `fedora-43-systemd` | `fedora-43.tar` | `fedora-systemd:43` |
+| `fedora-45-systemd` | `fedora-45.tar` | `fedora-systemd:45` |
+| `opensuse-latest-systemd` | `opensuse-latest.tar` | `opensuse-systemd:leap`, `:latest` |
+
+### Download and load
+
+Find a recent successful run and download its artifact with GitHub CLI:
+
+```bash
+gh run list --workflow auto-build.yml --limit 5
+gh run download <run-id> \
+  --name debian-trixie-systemd \
+  --dir staging/debian-trixie
+
+docker load --input staging/debian-trixie/debian-trixie.tar
+docker image ls debian-systemd
+```
+
+You can also download the artifact ZIP from the run's **Artifacts** section in
+the GitHub UI and load the tar file inside it.
+
+Run the loaded staging image with the same systemd requirements as Ubuntu:
+
+```bash
+docker run -d \
+  --name debian-systemd \
+  --privileged \
+  --cgroupns=host \
+  --stop-signal=SIGRTMIN+3 \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  debian-systemd:trixie
+
+docker exec debian-systemd systemctl is-system-running
+```
+
+### Promote a staging image later
+
+Authenticate to Docker Hub and retag every desired loaded tag under the eventual
+Hub repository. For example:
+
+```bash
+docker login
+docker tag debian-systemd:trixie <DOCKERHUB_USERNAME>/debian-systemd:trixie
+docker tag debian-systemd:13 <DOCKERHUB_USERNAME>/debian-systemd:13
+docker push <DOCKERHUB_USERNAME>/debian-systemd:trixie
+docker push <DOCKERHUB_USERNAME>/debian-systemd:13
+```
+
+The CI itself does not use Docker Hub credentials for staging distributions.
 
 ## How the automated build works
 
 The workflow in [`.github/workflows/auto-build.yml`](.github/workflows/auto-build.yml)
-runs every Sunday at 05:30 UTC and can also be started manually from the Actions
-tab. That window is after Canonical's weekly security rebuilds have normally
-propagated to Docker Hub, while GitHub Actions is at its quietest. All matrix
-jobs use GitHub's `ubuntu-26.04` runner image, which is currently Ubuntu 26.04.1
-LTS. The workflow has four independent matrix jobs, one per upstream Ubuntu tag,
-with `fail-fast: false` so one failed release does not block the others.
+runs every Sunday at **05:37 UTC** and can also be started manually. It uses
+GitHub's `ubuntu-26.04` runner image, which is currently Ubuntu 26.04.1 LTS.
 
-Each job avoids downloading image layers just to check for updates:
+The matrix has ten independent targets. `fail-fast: false` allows the remaining
+targets to continue if one distribution fails, and a per-target concurrency group
+prevents two runs from publishing the same tag.
 
-1. `scripts/check_and_render.py --tag <tag>` requests an anonymous pull token
-   from `auth.docker.io`.
-2. It sends a `HEAD` request for
-   `registry-1.docker.io/v2/library/ubuntu/manifests/<tag>`, accepting both
-   Docker manifest lists and OCI image indexes.
-3. It reads the `Docker-Content-Digest` response header and compares it with the
-   tier-specific state file `digests/last_digest_<tag>.txt`.
-4. If the digest is unchanged and the run is not forced, that matrix job skips
-   buildx setup, login, build, test, and push.
-5. If the digest changed (or `force_build` was selected), the script renders
-   `Dockerfile.template` into `Dockerfile.<tag>`, records the new digest, and
-   emits `should_build=true` and the tier's comma-separated `docker_tags`.
-6. The job builds `local/test-image:<tag>`, boots it with the required cgroup
-   configuration, and polls `systemctl is-system-running` for up to 10 seconds.
-   Both `running` and `degraded` are accepted.
-7. Only after the integration test passes is the image pushed under every target
-   tag for that tier.
-8. On success, only that tier's digest file is saved to the Actions cache. A
-   failed build never advances its cached digest, so the next run retries it.
+For every target:
 
-For example, a changed `resolute` digest publishes `resolute`, `26.04`, and
-`latest`; a changed `stonking` digest publishes `stonking`, `26.10`, and
-`rolling`.
+1. `actions/cache/restore` restores exactly
+   `digests/<distro>_<upstream-tag>.txt` for that matrix entry.
+2. `scripts/check_and_render.py` requests an anonymous Docker Hub token, then
+   sends a `HEAD` request for `library/<distro>:<tag>` or
+   `opensuse/leap:latest`, accepting Docker manifest lists and OCI indexes.
+3. It reads `Docker-Content-Digest` without pulling layers and compares it with
+   the cached state.
+4. If unchanged and not forced, it writes `should_build=false`; all build, test,
+   publish, and artifact steps are skipped.
+5. If changed or forced, it renders `templates/<distro>.Dockerfile.template` to
+   the root `Dockerfile`, records the new digest, and writes
+   `should_build=true` plus the comma-separated `target_tags`.
+6. The runner builds `local/test-image:<distro>-<tag>` with Buildx and runs
+   `tests/test_container.sh`. The test boots the image with `--privileged`, polls
+   `systemctl is-system-running` for up to 15 seconds, and accepts `running` or
+   `degraded`.
+7. Ubuntu logs in with `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` and pushes every
+   target tag to `quanvm0501alt1/ubuntu-systemd`.
+8. Staging distributions tag the local image as `<distro>-systemd:<tag>`, save a
+   tarball with `docker save`, and upload it as a GitHub Actions artifact with
+   three-day retention.
+9. Only after the push or artifact upload succeeds is that target's digest file
+   saved back to the Actions cache. Failed targets retry on the next run.
 
-Digest state is isolated per matrix entry. The workflow caches exactly
-`digests/last_digest_<tag>.txt` using `actions/cache/restore` and
-`actions/cache/save`. Actions cache entries are immutable, so each successful
-push saves a new run-specific key while restore uses a tag-specific prefix.
-
-The matrix jobs may run in parallel. A job-level concurrency group per Ubuntu
-tag prevents two workflow runs from publishing the same tier at the same time.
+The state file is written before the build but is only persisted to the cache
+after success. This prevents a failed build from advancing the digest and
+silently skipping the next attempt.
 
 ### Manual and forced runs
 
@@ -163,121 +266,133 @@ or use GitHub CLI:
 gh workflow run auto-build.yml --ref main -f force_build=true
 ```
 
-A forced run rebuilds and republishes all four tiers even when their upstream
-digests have not changed. This is also how to publish a change to
-`Dockerfile.template` before the next upstream digest update.
+A forced run rebuilds and republishes or re-uploads all ten targets, even when
+their upstream digests are unchanged. This is also how to publish template
+changes before the next upstream digest update.
 
-### Repository secrets
-
-Configure these repository secrets before enabling the workflow:
+### Secrets
 
 | Secret | Purpose |
 | --- | --- |
-| `DOCKERHUB_USERNAME` | Docker Hub account that owns the repository |
-| `DOCKERHUB_TOKEN` | Docker Hub access token with read/write permission |
+| `DOCKERHUB_USERNAME` | Docker Hub account for active Ubuntu pushes |
+| `DOCKERHUB_TOKEN` | Docker Hub access token with Ubuntu repository write access |
 
-The upstream digest check itself is anonymous and does not use either secret.
-The workflow only has `contents: read` permission for `GITHUB_TOKEN`.
+Staging targets do not read either secret. The workflow has read-only repository
+permissions and checks out with persisted credentials disabled.
+
+## Repository layout
+
+```text
+.
+├── .github/workflows/auto-build.yml
+├── templates/
+│   ├── ubuntu.Dockerfile.template
+│   ├── debian.Dockerfile.template
+│   ├── fedora.Dockerfile.template
+│   └── opensuse.Dockerfile.template
+├── scripts/check_and_render.py
+├── tests/test_container.sh
+├── Dockerfile                  # generated, ignored
+├── digests/                    # generated state, ignored
+└── README.md
+```
 
 ## Local development
 
-The digest checker needs only Python 3 and its standard library. It has no
-third-party dependencies.
-
-Render one release tier and inspect the emitted variables:
+The orchestrator uses only Python 3 and its standard library. Render one target
+and inspect the GitHub Actions-style output:
 
 ```bash
-python3 scripts/check_and_render.py /tmp/ubuntu-systemd-resolute.env \
-  --tag resolute \
+python3 scripts/check_and_render.py \
+  --distro ubuntu \
+  --upstream-repo library/ubuntu \
+  --upstream-tag noble \
+  --target-image quanvm0501alt1/ubuntu-systemd \
+  --output-env /tmp/ubuntu-noble.env \
   --force
 
-cat /tmp/ubuntu-systemd-resolute.env
+cat /tmp/ubuntu-noble.env
 ```
 
-To render all four tiers:
+The output contains:
 
-```bash
-for tag in jammy noble resolute stonking; do
-  python3 scripts/check_and_render.py "/tmp/ubuntu-systemd-${tag}.env" \
-    --tag "${tag}" \
-    --force
-done
+```text
+should_build=true
+target_tags=noble,24.04
 ```
 
-Build and test one rendered image locally on Linux:
+Build and test the rendered root `Dockerfile`:
 
 ```bash
 docker buildx build --load \
-  --file Dockerfile.resolute \
-  --tag local/test-image:resolute .
+  --file Dockerfile \
+  --tag local/test-image:ubuntu-noble .
 
-bash tests/test_container.sh local/test-image:resolute
+bash tests/test_container.sh local/test-image:ubuntu-noble
 ```
 
-`Dockerfile.<tag>` and `digests/last_digest_<tag>.txt` are generated artifacts
-and are ignored by Git. `Dockerfile.template` is the source of truth. After
-changing the template or other build inputs, trigger the workflow manually with
-`force_build` so the change is published even when the upstream digests have not
-moved.
+Useful target arguments:
 
-### Adding another Ubuntu tier
+| Distribution | `--upstream-repo` | `--upstream-tag` | `--target-image` |
+| --- | --- | --- | --- |
+| Ubuntu | `library/ubuntu` | `resolute` | `quanvm0501alt1/ubuntu-systemd` |
+| Ubuntu | `library/ubuntu` | `noble` | `quanvm0501alt1/ubuntu-systemd` |
+| Ubuntu | `library/ubuntu` | `jammy` | `quanvm0501alt1/ubuntu-systemd` |
+| Ubuntu | `library/ubuntu` | `stonking` | `quanvm0501alt1/ubuntu-systemd` |
+| Debian | `library/debian` | `trixie` | `<DOCKERHUB_USERNAME>/debian-systemd` |
+| Debian | `library/debian` | `bookworm` | `<DOCKERHUB_USERNAME>/debian-systemd` |
+| Fedora | `library/fedora` | `44` | `<DOCKERHUB_USERNAME>/fedora-systemd` |
+| Fedora | `library/fedora` | `43` | `<DOCKERHUB_USERNAME>/fedora-systemd` |
+| Fedora | `library/fedora` | `45` | `<DOCKERHUB_USERNAME>/fedora-systemd` |
+| openSUSE Leap | `opensuse/leap` | `latest` | `<DOCKERHUB_USERNAME>/opensuse-systemd` |
 
-1. Add an entry to the `TARGETS` dictionary in
-   `scripts/check_and_render.py`, including the upstream tag, Docker tags,
-   generated Dockerfile path, and digest state path.
-2. Add the tag to the workflow matrix.
-3. Add the tag and pull command to the table in this README.
-4. Render the Dockerfile, build it, and run the integration test before pushing.
+`Dockerfile`, `digests/`, and staging tarballs are generated artifacts and are
+ignored by Git. After changing a template or the orchestrator, run the workflow
+manually with `force_build` to publish the change.
 
-### Adding another distribution
+### Adding a distribution or tag
 
-The polling, state, rendering, and test flow are not Ubuntu-specific. A future
-Debian, Fedora, or Arch Linux tier can reuse them with a distribution-specific
-template and a new entry in `TARGETS` (or a similarly named config mapping), plus
-a matrix entry and isolated cache path. Run the rendered image through
-`tests/test_container.sh` before allowing a push.
+1. Add the distribution template at `templates/<distro>.Dockerfile.template`.
+2. Add its upstream-tag-to-target-tag mapping to `TARGET_TAGS` in
+   `scripts/check_and_render.py`.
+3. Add a matrix entry in `.github/workflows/auto-build.yml`, including
+   `upstream_repo`, `upstream_tag`, `target_image`, and `push_to_hub`.
+4. Add the tags and staging or active status to this README.
+5. Render, build, and run `tests/test_container.sh` before pushing.
 
 ## Security considerations
 
-- **Do not treat this image as a security boundary.** The documented Docker
-  command uses `--privileged`, which gives the container broad control over the
-  host. Run it only with trusted workloads and trusted users.
-- The image runs systemd as root because PID 1 must manage services and cgroups.
-  It is not a rootless application sandbox.
-- Only a minimal package set is installed (`--no-install-recommends`) and apt
-  metadata is removed in the same layer.
-- Each weekly rebuild picks up updated packages for its Ubuntu release. If a
-  tier fails, its previous image and tags remain published.
-- `latest` stays on the 26.04 LTS tier. Use `rolling` deliberately if you want
-  the 26.10 interim release.
-- The digest check is read-only and anonymous. Docker Hub credentials are used
-  only after a build is required and are supplied through repository secrets.
-- The workflow has read-only repository permissions and never checks out with
-  persisted credentials.
-- For reproducible production deployments, pin the published image by digest
-  instead of relying on a floating tag.
-- Keep the Docker Hub access token scoped to the single repository and rotate it
-  if it is exposed.
+- **Do not treat these images as a security boundary.** The documented Docker
+  command uses `--privileged`, which grants broad control over the host. Run only
+  trusted workloads with trusted users.
+- The images run systemd as root because PID 1 must manage services and cgroups.
+- Only a minimal package set is installed, and package-manager metadata is
+  removed in the same layer.
+- Ubuntu tags are updated weekly when the upstream digest changes. If a target
+  fails, its previous Ubuntu image and tags remain published.
+- Staging artifacts are unsigned GitHub Actions artifacts with a three-day
+  retention. Verify their origin before loading or promoting them.
+- For reproducible production deployments, pin images by digest rather than
+  relying on a floating tag.
+- Keep the Docker Hub access token scoped to the Ubuntu repository. Staging jobs
+  do not receive it.
 
 ## Contributing
 
 Issues and pull requests are welcome.
 
 1. Fork the repository and create a focused branch.
-2. Keep changes compatible with the template/configuration split; do not commit
-   generated `Dockerfile.<tag>` files or digest state files.
-3. Run the digest checker, build, and integration test locally for each affected
-   tier.
-4. Describe the change and any security implications in the pull request.
-5. For a new Ubuntu tier or distribution, include a tested template,
-   configuration entry, matrix entry, and documentation updates.
+2. Keep the template/orchestrator split; do not commit generated `Dockerfile`,
+   `digests/`, or staging tarballs.
+3. Run the renderer, build, and integration test for each affected target.
+4. Describe any deployment or security implications in the pull request.
+5. Include documentation updates for new tags, distributions, or artifact names.
 
 Please avoid opening public issues containing credentials or other secrets.
 
 ## Roadmap
 
-- [ ] Debian support using the shared apt-based template pattern
-- [ ] Fedora support using a dnf-specific template
-- [ ] Arch Linux support using a pacman-specific template
 - [ ] Multi-architecture image manifests with native integration testing
-- [ ] SBOM generation and signed image provenance
+- [ ] Signed staging artifacts and promoted-image provenance
+- [ ] Optional automated Hub publishing for Debian, Fedora, and openSUSE
+- [ ] SBOM generation for every distribution

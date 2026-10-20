@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 #
-# Boot the locally built systemd image and verify that systemd reaches a usable
+# Boot a locally built systemd image and verify that systemd reaches a usable
 # state. "degraded" is accepted because minimal containers commonly have a few
 # optional units that cannot run without host-specific resources.
 #
-# Usage: tests/test_container.sh [IMAGE]
-# Default image: local/test-image:latest
+# Usage: tests/test_container.sh IMAGE
 
 set -euo pipefail
 
-IMAGE="${1:-local/test-image:latest}"
-CONTAINER="ubuntu-systemd-test-$$"
-READY_STATE=""
-LAST_STATE="unknown"
-
-if [[ $# -gt 1 ]]; then
-    echo "Usage: $0 [IMAGE]" >&2
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 IMAGE" >&2
     exit 2
 fi
+
+IMAGE="$1"
+CONTAINER="systemd-test-$$"
+READY_STATE=""
+LAST_STATE="unknown"
+MAX_ATTEMPTS=15
 
 if ! command -v docker >/dev/null 2>&1; then
     echo "error: docker is required to run the integration test" >&2
@@ -37,22 +37,22 @@ echo "Starting ${IMAGE} as ${CONTAINER}"
 # --privileged and --cgroupns=host let systemd manage cgroups in the same way
 # it does on a normal Linux host. The host cgroup filesystem must be mounted
 # read-write for units to start reliably on both cgroup v1 and v2 systems.
+# Do not override the image CMD: distributions use different systemd paths.
 if ! docker run \
     --detach \
     --name "${CONTAINER}" \
     --privileged \
     --cgroupns=host \
     --volume /sys/fs/cgroup:/sys/fs/cgroup:rw \
-    "${IMAGE}" \
-    /sbin/init >/dev/null; then
+    "${IMAGE}" >/dev/null; then
     echo "error: failed to start the test container" >&2
     docker logs "${CONTAINER}" 2>&1 || true
     exit 1
 fi
 
-# Poll for up to 10 seconds. is-system-running exits non-zero for "degraded"
+# Poll for up to 15 seconds. is-system-running exits non-zero for "degraded"
 # and "starting", so capture its output without letting set -e abort the loop.
-for ((attempt = 1; attempt <= 10; attempt++)); do
+for ((attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)); do
     LAST_STATE="$(docker exec "${CONTAINER}" systemctl is-system-running 2>/dev/null || true)"
 
     case "${LAST_STATE}" in
@@ -62,7 +62,7 @@ for ((attempt = 1; attempt <= 10; attempt++)); do
             ;;
     esac
 
-    if [[ ${attempt} -lt 10 ]]; then
+    if [[ ${attempt} -lt ${MAX_ATTEMPTS} ]]; then
         sleep 1
     fi
 done
@@ -72,7 +72,7 @@ if [[ -n "${READY_STATE}" ]]; then
     exit 0
 fi
 
-echo "error: systemd did not become ready within 10 seconds (last state: ${LAST_STATE:-unknown})" >&2
+echo "error: systemd did not become ready within 15 seconds (last state: ${LAST_STATE:-unknown})" >&2
 echo "--- container logs (last 100 lines) ---" >&2
 docker logs --tail 100 "${CONTAINER}" 2>&1 || true
 echo "--- systemctl status ---" >&2

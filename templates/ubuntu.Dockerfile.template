@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # This file is a template. scripts/check_and_render.py substitutes the
-# placeholders below and writes the generated Dockerfile.
+# placeholders below and writes the generated root Dockerfile.
 # The upstream tag is intentionally unpinned; the automation in this repository
 # rebuilds when the upstream digest changes and picks up security updates.
 # hadolint ignore=DL3007

@@ -2,12 +2,13 @@
 .github
 .gitignore
 .dockerignore
-Dockerfile.template
+templates
 LICENSE
 README.md
 scripts
 tests
 digests
+*.tar
 last_digest.txt
 github_env.txt
 __pycache__

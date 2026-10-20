@@ -2,13 +2,13 @@ name: Build systemd images
 
 on:
   schedule:
-    # Sundays at 05:30 UTC: Canonical's weekly rebuilds have usually propagated
-    # to Docker Hub by then, and GitHub Actions is at its lowest load.
-    - cron: "30 5 * * 0"
+    # Sundays at 05:37 UTC: upstream rebuilds have usually propagated to Docker
+    # Hub by then, and GitHub Actions is at its lowest global load.
+    - cron: "37 5 * * 0"
   workflow_dispatch:
     inputs:
       force_build:
-        description: Build and push every tier even if its upstream digest is unchanged
+        description: Build every target even if its upstream digest is unchanged
         required: false
         default: false
         type: boolean
@@ -20,34 +20,81 @@ defaults:
   run:
     shell: bash
 
-env:
-  IMAGE_NAME: quanvm0501alt1/ubuntu-systemd
-
 jobs:
-  build-and-push:
-    name: Ubuntu ${{ matrix.distro.tag }}
+  build-and-publish:
+    name: ${{ matrix.distro }} ${{ matrix.upstream_tag }}
     # GitHub's runner label has no point-release suffix; this image is Ubuntu
     # 26.04.1 LTS.
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     strategy:
       fail-fast: false
+      # Target tag lists live beside the renderer mapping so the workflow and
+      # local renders use one source of truth.
       matrix:
-        distro:
-          - tag: resolute
-          - tag: noble
-          - tag: jammy
-          - tag: stonking
+        include:
+          - distro: ubuntu
+            upstream_repo: library/ubuntu
+            upstream_tag: resolute
+            target_image: quanvm0501alt1/ubuntu-systemd
+            push_to_hub: true
+          - distro: ubuntu
+            upstream_repo: library/ubuntu
+            upstream_tag: noble
+            target_image: quanvm0501alt1/ubuntu-systemd
+            push_to_hub: true
+          - distro: ubuntu
+            upstream_repo: library/ubuntu
+            upstream_tag: jammy
+            target_image: quanvm0501alt1/ubuntu-systemd
+            push_to_hub: true
+          - distro: ubuntu
+            upstream_repo: library/ubuntu
+            upstream_tag: stonking
+            target_image: quanvm0501alt1/ubuntu-systemd
+            push_to_hub: true
+          - distro: debian
+            upstream_repo: library/debian
+            upstream_tag: trixie
+            target_image: "<DOCKERHUB_USERNAME>/debian-systemd"
+            push_to_hub: false
+          - distro: debian
+            upstream_repo: library/debian
+            upstream_tag: bookworm
+            target_image: "<DOCKERHUB_USERNAME>/debian-systemd"
+            push_to_hub: false
+          - distro: fedora
+            upstream_repo: library/fedora
+            upstream_tag: "44"
+            target_image: "<DOCKERHUB_USERNAME>/fedora-systemd"
+            push_to_hub: false
+          - distro: fedora
+            upstream_repo: library/fedora
+            upstream_tag: "43"
+            target_image: "<DOCKERHUB_USERNAME>/fedora-systemd"
+            push_to_hub: false
+          - distro: fedora
+            upstream_repo: library/fedora
+            upstream_tag: "45"
+            target_image: "<DOCKERHUB_USERNAME>/fedora-systemd"
+            push_to_hub: false
+          - distro: opensuse
+            upstream_repo: opensuse/leap
+            upstream_tag: latest
+            target_image: "<DOCKERHUB_USERNAME>/opensuse-systemd"
+            push_to_hub: false
 
-    # Matrix entries may run in parallel, but two runs for the same Ubuntu
-    # release must never publish over each other.
+    # Matrix entries may run in parallel, but two runs for the same target must
+    # never publish or upload over each other.
     concurrency:
-      group: ubuntu-systemd-${{ matrix.distro.tag }}
+      group: systemd-${{ matrix.distro }}-${{ matrix.upstream_tag }}
       cancel-in-progress: false
 
     env:
-      LOCAL_IMAGE: local/test-image:${{ matrix.distro.tag }}
+      LOCAL_IMAGE: local/test-image:${{ matrix.distro }}-${{ matrix.upstream_tag }}
+      TARBALL: ${{ matrix.distro }}-${{ matrix.upstream_tag }}.tar
+      STAGING_IMAGE: ${{ matrix.distro }}-systemd
 
     steps:
       - name: Check out repository
@@ -60,28 +107,35 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Cache entries are immutable, so restore the newest state for this tag
-      # with a prefix key and save a new run-specific key after a successful push.
+      # Cache entries are immutable, so restore the newest state for this target
+      # with a prefix key and save a new run-specific key after a successful push
+      # or artifact upload.
       - name: Restore upstream digest cache
         uses: actions/cache/restore@v6
         with:
-          path: digests/last_digest_${{ matrix.distro.tag }}.txt
-          key: ${{ runner.os }}-ubuntu-${{ matrix.distro.tag }}-digest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: digests/${{ matrix.distro }}_${{ matrix.upstream_tag }}.txt
+          key: ${{ runner.os }}-systemd-${{ matrix.distro }}-${{ matrix.upstream_tag }}-digest-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            ${{ runner.os }}-ubuntu-${{ matrix.distro.tag }}-digest-
+            ${{ runner.os }}-systemd-${{ matrix.distro }}-${{ matrix.upstream_tag }}-digest-
 
       - name: Check upstream digest and render Dockerfile
         id: check
         env:
           FORCE_BUILD: ${{ inputs.force_build || 'false' }}
+          DISTRO: ${{ matrix.distro }}
+          UPSTREAM_REPO: ${{ matrix.upstream_repo }}
+          UPSTREAM_TAG: ${{ matrix.upstream_tag }}
+          TARGET_IMAGE: ${{ matrix.target_image }}
         run: |
           args=(
-            "${GITHUB_ENV}"
-            "--tag" "${{ matrix.distro.tag }}"
-            "--github-output" "${GITHUB_OUTPUT}"
+            --distro "${DISTRO}"
+            --upstream-repo "${UPSTREAM_REPO}"
+            --upstream-tag "${UPSTREAM_TAG}"
+            --target-image "${TARGET_IMAGE}"
+            --output-env "${GITHUB_OUTPUT}"
           )
           if [[ "${FORCE_BUILD}" == "true" ]]; then
-            args+=("--force")
+            args+=(--force)
           fi
           python3 scripts/check_and_render.py "${args[@]}"
 
@@ -89,20 +143,13 @@ jobs:
         if: steps.check.outputs.should_build == 'true'
         uses: docker/setup-buildx-action@v4
 
-      - name: Log in to Docker Hub
-        if: steps.check.outputs.should_build == 'true'
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Build image locally
         if: steps.check.outputs.should_build == 'true'
         run: |
           docker buildx build \
             --pull \
             --load \
-            --file "Dockerfile.${{ matrix.distro.tag }}" \
+            --file Dockerfile \
             --tag "${LOCAL_IMAGE}" \
             .
 
@@ -110,26 +157,57 @@ jobs:
         if: steps.check.outputs.should_build == 'true'
         run: bash tests/test_container.sh "${LOCAL_IMAGE}"
 
-      - name: Push all target tags
-        if: steps.check.outputs.should_build == 'true'
+      - name: Log in to Docker Hub
+        if: steps.check.outputs.should_build == 'true' && matrix.push_to_hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push active Ubuntu tags
+        if: steps.check.outputs.should_build == 'true' && matrix.push_to_hub
         env:
-          DOCKER_TAGS: ${{ steps.check.outputs.docker_tags }}
+          TARGET_IMAGE: ${{ matrix.target_image }}
+          TARGET_TAGS: ${{ steps.check.outputs.target_tags }}
         run: |
-          IFS=',' read -ra target_tags <<< "${DOCKER_TAGS}"
+          IFS=',' read -ra target_tags <<< "${TARGET_TAGS}"
           for target_tag in "${target_tags[@]}"; do
-            docker tag "${LOCAL_IMAGE}" "${IMAGE_NAME}:${target_tag}"
-          done
-          for target_tag in "${target_tags[@]}"; do
-            echo "Pushing ${IMAGE_NAME}:${target_tag}"
-            docker push "${IMAGE_NAME}:${target_tag}"
+            docker tag "${LOCAL_IMAGE}" "${TARGET_IMAGE}:${target_tag}"
+            echo "Pushing ${TARGET_IMAGE}:${target_tag}"
+            docker push "${TARGET_IMAGE}:${target_tag}"
           done
 
+      - name: Save staging image tarball
+        if: steps.check.outputs.should_build == 'true' && !matrix.push_to_hub
+        env:
+          TARGET_TAGS: ${{ steps.check.outputs.target_tags }}
+        run: |
+          IFS=',' read -ra target_tags <<< "${TARGET_TAGS}"
+          image_refs=()
+          for target_tag in "${target_tags[@]}"; do
+            image_ref="${STAGING_IMAGE}:${target_tag}"
+            docker tag "${LOCAL_IMAGE}" "${image_ref}"
+            image_refs+=("${image_ref}")
+          done
+          docker save --output "${TARBALL}" "${image_refs[@]}"
+          ls -lh "${TARBALL}"
+
+      - name: Upload staging artifact
+        if: steps.check.outputs.should_build == 'true' && !matrix.push_to_hub
+        # v4/v5 still target Node 20; keep this on the Node 24 action line.
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.distro }}-${{ matrix.upstream_tag }}-systemd
+          path: ${{ matrix.distro }}-${{ matrix.upstream_tag }}.tar
+          retention-days: 3
+          if-no-files-found: error
+
       # The digest file is written before the build, but only persist it after
-      # the image has passed tests and every tag has reached Docker Hub. A failed
-      # tier must not advance its cached digest and skip a needed rebuild.
+      # the image has passed tests and every tag or artifact is complete. A failed
+      # target must not advance its cached digest and skip a needed rebuild.
       - name: Save upstream digest cache
         if: success() && steps.check.outputs.should_build == 'true'
         uses: actions/cache/save@v6
         with:
-          path: digests/last_digest_${{ matrix.distro.tag }}.txt
-          key: ${{ runner.os }}-ubuntu-${{ matrix.distro.tag }}-digest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: digests/${{ matrix.distro }}_${{ matrix.upstream_tag }}.txt
+          key: ${{ runner.os }}-systemd-${{ matrix.distro }}-${{ matrix.upstream_tag }}-digest-${{ github.run_id }}-${{ github.run_attempt }}

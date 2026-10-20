@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1
+
+# Rendered by scripts/check_and_render.py. The upstream tag stays unpinned so
+# each digest-triggered rebuild picks up the latest openSUSE Leap updates.
+# hadolint ignore=DL3007
+FROM {{BASE_IMAGE}}:{{BASE_TAG}}
+
+LABEL org.opencontainers.image.title="opensuse-systemd" \
+      org.opencontainers.image.description="Minimal openSUSE Leap image with systemd as PID 1" \
+      org.opencontainers.image.source="https://github.com/BlackCatOfficialytb/systemd-container-gen" \
+      org.opencontainers.image.version="{{BASE_TAG}}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+# Install the systemd userspace and remove zypper's package cache. Leap 16 no
+# longer publishes the separate systemd-sysvinit package; systemd itself
+# provides /usr/lib/systemd/systemd, which is the CMD below. Versions follow the
+# selected upstream Leap release.
+# hadolint ignore=DL3037
+RUN zypper --non-interactive in -y systemd \
+    && zypper clean -a
+
+# Select the headless target and make every container generate its own machine
+# ID instead of sharing the one created while the packages were installed.
+RUN systemctl set-default multi-user.target \
+    && rm -f /var/lib/dbus/machine-id \
+    && : > /etc/machine-id
+
+VOLUME [ "/sys/fs/cgroup" ]
+STOPSIGNAL SIGRTMIN+3
+
+CMD [ "/usr/lib/systemd/systemd" ]

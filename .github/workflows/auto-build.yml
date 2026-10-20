@@ -1,0 +1,133 @@
+name: Build systemd images
+
+on:
+  schedule:
+    # Sundays at 05:30 UTC: Canonical's weekly rebuilds have usually propagated
+    # to Docker Hub by then, and GitHub Actions is at its lowest load.
+    - cron: "30 5 * * 0"
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: Build and push every tier even if its upstream digest is unchanged
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  IMAGE_NAME: quanvm0501alt1/ubuntu-systemd
+
+jobs:
+  build-and-push:
+    name: Ubuntu ${{ matrix.distro.tag }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - tag: resolute
+          - tag: noble
+          - tag: jammy
+          - tag: stonking
+
+    # Matrix entries may run in parallel, but two runs for the same Ubuntu
+    # release must never publish over each other.
+    concurrency:
+      group: ubuntu-systemd-${{ matrix.distro.tag }}
+      cancel-in-progress: false
+
+    env:
+      LOCAL_IMAGE: local/test-image:${{ matrix.distro.tag }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Cache entries are immutable, so restore the newest state for this tag
+      # with a prefix key and save a new run-specific key after a successful push.
+      - name: Restore upstream digest cache
+        uses: actions/cache/restore@v4
+        with:
+          path: digests/last_digest_${{ matrix.distro.tag }}.txt
+          key: ${{ runner.os }}-ubuntu-${{ matrix.distro.tag }}-digest-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ runner.os }}-ubuntu-${{ matrix.distro.tag }}-digest-
+
+      - name: Check upstream digest and render Dockerfile
+        id: check
+        env:
+          FORCE_BUILD: ${{ inputs.force_build || 'false' }}
+        run: |
+          args=(
+            "${GITHUB_ENV}"
+            "--tag" "${{ matrix.distro.tag }}"
+            "--github-output" "${GITHUB_OUTPUT}"
+          )
+          if [[ "${FORCE_BUILD}" == "true" ]]; then
+            args+=("--force")
+          fi
+          python3 scripts/check_and_render.py "${args[@]}"
+
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.should_build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: steps.check.outputs.should_build == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build image locally
+        if: steps.check.outputs.should_build == 'true'
+        run: |
+          docker buildx build \
+            --pull \
+            --load \
+            --file "Dockerfile.${{ matrix.distro.tag }}" \
+            --tag "${LOCAL_IMAGE}" \
+            .
+
+      - name: Run systemd integration test
+        if: steps.check.outputs.should_build == 'true'
+        run: bash tests/test_container.sh "${LOCAL_IMAGE}"
+
+      - name: Push all target tags
+        if: steps.check.outputs.should_build == 'true'
+        env:
+          DOCKER_TAGS: ${{ steps.check.outputs.docker_tags }}
+        run: |
+          IFS=',' read -ra target_tags <<< "${DOCKER_TAGS}"
+          for target_tag in "${target_tags[@]}"; do
+            docker tag "${LOCAL_IMAGE}" "${IMAGE_NAME}:${target_tag}"
+          done
+          for target_tag in "${target_tags[@]}"; do
+            echo "Pushing ${IMAGE_NAME}:${target_tag}"
+            docker push "${IMAGE_NAME}:${target_tag}"
+          done
+
+      # The digest file is written before the build, but only persist it after
+      # the image has passed tests and every tag has reached Docker Hub. A failed
+      # tier must not advance its cached digest and skip a needed rebuild.
+      - name: Save upstream digest cache
+        if: success() && steps.check.outputs.should_build == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: digests/last_digest_${{ matrix.distro.tag }}.txt
+          key: ${{ runner.os }}-ubuntu-${{ matrix.distro.tag }}-digest-${{ github.run_id }}-${{ github.run_attempt }}

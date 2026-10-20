@@ -1,0 +1,73 @@
+# syntax=docker/dockerfile:1
+
+# This file is a template. scripts/check_and_render.py substitutes the
+# placeholders below and writes the generated Dockerfile.
+# The upstream tag is intentionally unpinned; the automation in this repository
+# rebuilds when the upstream digest changes and picks up security updates.
+# hadolint ignore=DL3007
+FROM {{BASE_IMAGE}}:{{BASE_TAG}}
+
+LABEL org.opencontainers.image.title="ubuntu-systemd" \
+      org.opencontainers.image.description="Minimal Ubuntu image with systemd as PID 1" \
+      org.opencontainers.image.source="https://github.com/quanvm0501alt1/ubuntu-systemd" \
+      org.opencontainers.image.version="{{BASE_TAG}}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
+# Keep package installation non-interactive without baking the variable into
+# the final image environment.
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install only the minimum systemd userspace. Recommends are intentionally
+# skipped, and package metadata is removed in the same layer.
+# Package versions are deliberately not pinned: each weekly rebuild takes the
+# current security updates for the selected Ubuntu release.
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        systemd \
+        systemd-sysv \
+        udev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# This image is intended to be a headless container. Remove getty/console
+# activation links and mask the units so nothing tries to attach a virtual
+# console. Use multi-user.target as the default boot target. Empty the machine
+# ID so each container generates its own on first boot instead of sharing the
+# ID created while the package was installed.
+RUN find /etc/systemd/system -type l \
+        \( -name 'getty.target' \
+           -o -name 'console-getty.service' \
+           -o -name 'getty@*.service' \
+           -o -name 'serial-getty@*.service' \) \
+        -delete \
+    && systemctl mask console-getty.service getty.target \
+    && systemctl set-default multi-user.target \
+    && rm -f /var/lib/dbus/machine-id \
+    && : > /etc/machine-id
+
+# systemd manages the cgroup hierarchy. Callers must mount the host cgroup
+# filesystem here (see README.md); the VOLUME declaration documents that need.
+VOLUME [ "/sys/fs/cgroup" ]
+
+# Ask systemd to shut down cleanly when the container runtime sends this
+# signal instead of immediately terminating PID 1.
+STOPSIGNAL SIGRTMIN+3
+
+# Make the runtime requirements visible to anyone who opens an interactive
+# shell in the container.
+RUN printf '%s\n' \
+        '' \
+        '============================================================' \
+        ' systemd container: start this image with systemd support.' \
+        ' Published tags: {{TARGET_TAGS}}' \
+        ' Podman:' \
+        '   podman run -it --security-opt label=disable --systemd=always {{IMAGE_NAME}}:{{BASE_TAG}}' \
+        ' Docker:' \
+        '   docker run -d --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw {{IMAGE_NAME}}:{{BASE_TAG}}' \
+        ' Open a shell with: <podman|docker> exec -it <container> bash' \
+        '============================================================' \
+        '' \
+    >> /etc/bash.bashrc
+
+CMD [ "/sbin/init" ]

@@ -1,0 +1,30 @@
+# Generated at build/check time
+/Dockerfile
+/Dockerfile.*
+!/Dockerfile.template
+/digests/
+/last_digest.txt
+/github_env.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local temporary files and logs
+*.tmp
+*.tmp.*
+*.log
+*.swp
+*~
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

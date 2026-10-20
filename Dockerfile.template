@@ -9,7 +9,7 @@ FROM {{BASE_IMAGE}}:{{BASE_TAG}}
 
 LABEL org.opencontainers.image.title="ubuntu-systemd" \
       org.opencontainers.image.description="Minimal Ubuntu image with systemd as PID 1" \
-      org.opencontainers.image.source="https://github.com/quanvm0501alt1/ubuntu-systemd" \
+      org.opencontainers.image.source="https://github.com/BlackCatOfficialytb/systemd-container-gen" \
       org.opencontainers.image.version="{{BASE_TAG}}" \
       org.opencontainers.image.licenses="Apache-2.0"
 

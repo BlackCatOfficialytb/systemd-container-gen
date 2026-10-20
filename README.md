@@ -1,6 +1,6 @@
 # ubuntu-systemd
 
-[![Build systemd images](https://github.com/BlackCatOfficialytb/ubuntu-systemd-container-gen/actions/workflows/auto-build.yml/badge.svg?branch=main)](https://github.com/BlackCatOfficialytb/ubuntu-systemd-container-gen/actions/workflows/auto-build.yml)
+[![Build systemd images](https://github.com/BlackCatOfficialytb/systemd-container-gen/actions/workflows/auto-build.yml/badge.svg?branch=main)](https://github.com/BlackCatOfficialytb/systemd-container-gen/actions/workflows/auto-build.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/quanvm0501alt1/ubuntu-systemd)](https://hub.docker.com/r/quanvm0501alt1/ubuntu-systemd)
 
 A small, automatically maintained set of Ubuntu images with `systemd` running as

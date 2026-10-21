@@ -287,8 +287,10 @@ gh workflow run auto-build.yml --ref main -f force_build=true
 ```
 
 A forced run rebuilds and republishes or re-uploads all ten targets, even when
-their upstream digests are unchanged. This is also how to publish template
-changes before the next upstream digest update.
+their upstream digests are unchanged. Use this to publish template changes
+before the next upstream digest update or to seed a newly created Docker Hub
+repository. Digest state tracks only the upstream digest, so a repository or
+target-image change alone does not trigger a push.
 
 ### Secrets
 

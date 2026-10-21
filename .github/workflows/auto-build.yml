@@ -57,28 +57,28 @@ jobs:
           - distro: debian
             upstream_repo: library/debian
             upstream_tag: trixie
-            target_image: "<DOCKERHUB_USERNAME>/debian-systemd"
-            push_to_hub: false
+            target_image: quanvm0501alt1/debian-systemd
+            push_to_hub: true
           - distro: debian
             upstream_repo: library/debian
             upstream_tag: bookworm
-            target_image: "<DOCKERHUB_USERNAME>/debian-systemd"
-            push_to_hub: false
+            target_image: quanvm0501alt1/debian-systemd
+            push_to_hub: true
           - distro: fedora
             upstream_repo: library/fedora
             upstream_tag: "44"
-            target_image: "<DOCKERHUB_USERNAME>/fedora-systemd"
-            push_to_hub: false
+            target_image: quanvm0501alt1/fedora-systemd
+            push_to_hub: true
           - distro: fedora
             upstream_repo: library/fedora
             upstream_tag: "43"
-            target_image: "<DOCKERHUB_USERNAME>/fedora-systemd"
-            push_to_hub: false
+            target_image: quanvm0501alt1/fedora-systemd
+            push_to_hub: true
           - distro: fedora
             upstream_repo: library/fedora
             upstream_tag: "45"
-            target_image: "<DOCKERHUB_USERNAME>/fedora-systemd"
-            push_to_hub: false
+            target_image: quanvm0501alt1/fedora-systemd
+            push_to_hub: true
           - distro: opensuse
             upstream_repo: opensuse/leap
             upstream_tag: latest
@@ -164,7 +164,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Push active Ubuntu tags
+      - name: Push active Hub tags
         if: steps.check.outputs.should_build == 'true' && matrix.push_to_hub
         env:
           TARGET_IMAGE: ${{ matrix.target_image }}
@@ -211,3 +211,23 @@ jobs:
         with:
           path: digests/${{ matrix.distro }}_${{ matrix.upstream_tag }}.txt
           key: ${{ runner.os }}-systemd-${{ matrix.distro }}-${{ matrix.upstream_tag }}-digest-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # GitHub-hosted runners are discarded after the job, but self-hosted
+      # Docker/Podman runners can accumulate many GB across ten targets. Clean
+      # the local stores after the upload/push and cache save, even on failure.
+      - name: Clean Docker and Podman image storage
+        if: always()
+        continue-on-error: true
+        run: |
+          if command -v docker >/dev/null 2>&1; then
+            echo "Cleaning Docker image and build cache storage"
+            docker image prune --all --force || true
+            if docker buildx version >/dev/null 2>&1; then
+              docker buildx prune --all --force || true
+            fi
+          fi
+
+          if command -v podman >/dev/null 2>&1; then
+            echo "Cleaning Podman image storage"
+            podman image prune --all --force || true
+          fi

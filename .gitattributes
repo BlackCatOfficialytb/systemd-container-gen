@@ -1,0 +1,15 @@
+* text=auto
+
+# Keep executable scripts, templates, and CI configuration on LF so they work
+# from Windows checkouts (including WSL) as well as Linux runners.
+.gitattributes text eol=lf
+.gitignore text eol=lf
+.dockerignore text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.Dockerfile.template text eol=lf
+Dockerfile text eol=lf
+LICENSE text eol=lf

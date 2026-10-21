@@ -1,31 +1,37 @@
 # systemd container generator
 
 [![Build systemd images](https://github.com/BlackCatOfficialytb/systemd-container-gen/actions/workflows/auto-build.yml/badge.svg?branch=main)](https://github.com/BlackCatOfficialytb/systemd-container-gen/actions/workflows/auto-build.yml)
-[![Docker Pulls](https://img.shields.io/docker/pulls/quanvm0501alt1/ubuntu-systemd)](https://hub.docker.com/r/quanvm0501alt1/ubuntu-systemd)
+[![Ubuntu pulls](https://img.shields.io/docker/pulls/quanvm0501alt1/ubuntu-systemd?label=ubuntu-systemd)](https://hub.docker.com/r/quanvm0501alt1/ubuntu-systemd)
+[![Debian pulls](https://img.shields.io/docker/pulls/quanvm0501alt1/debian-systemd?label=debian-systemd)](https://hub.docker.com/r/quanvm0501alt1/debian-systemd)
+[![Fedora pulls](https://img.shields.io/docker/pulls/quanvm0501alt1/fedora-systemd?label=fedora-systemd)](https://hub.docker.com/r/quanvm0501alt1/fedora-systemd)
 
 A modular, digest-driven build system for minimal systemd containers. Each
 distribution has its own Dockerfile template and digest state, while one
 orchestrator renders the selected template and decides whether a weekly build is
 needed.
 
-Ubuntu is published to Docker Hub at
-[`quanvm0501alt1/ubuntu-systemd`](https://hub.docker.com/r/quanvm0501alt1/ubuntu-systemd).
-Debian, Fedora, and openSUSE Leap are currently **staging artifacts**: they are
-built, boot-tested, saved as image tarballs, and attached to the Actions run for
-three days. They are not pushed to Docker Hub.
+Ubuntu, Debian, and Fedora are published to Docker Hub at
+[`quanvm0501alt1/ubuntu-systemd`](https://hub.docker.com/r/quanvm0501alt1/ubuntu-systemd),
+[`quanvm0501alt1/debian-systemd`](https://hub.docker.com/r/quanvm0501alt1/debian-systemd),
+and
+[`quanvm0501alt1/fedora-systemd`](https://hub.docker.com/r/quanvm0501alt1/fedora-systemd).
+openSUSE Leap is currently a **staging artifact**: it is built, boot-tested,
+saved as an image tarball, and attached to the Actions run for three days. It is
+not pushed to Docker Hub.
 
 ## Deployment status
 
-| Distribution | Matrix targets | Local artifact image | Hub target | Status |
-| --- | --- | --- | --- | --- |
-| Ubuntu | `resolute`, `noble`, `jammy`, `stonking` | `quanvm0501alt1/ubuntu-systemd` | `quanvm0501alt1/ubuntu-systemd` | Active Hub push |
-| Debian | `trixie`, `bookworm` | `debian-systemd` | `<DOCKERHUB_USERNAME>/debian-systemd` | Staging artifact |
-| Fedora | `44`, `43`, `45` | `fedora-systemd` | `<DOCKERHUB_USERNAME>/fedora-systemd` | Staging artifact |
-| openSUSE Leap | `latest` | `opensuse-systemd` | `<DOCKERHUB_USERNAME>/opensuse-systemd` | Staging artifact |
+| Distribution | Matrix targets | Docker image | Status |
+| --- | --- | --- | --- |
+| Ubuntu | `resolute`, `noble`, `jammy`, `stonking` | `quanvm0501alt1/ubuntu-systemd` | Active Hub push |
+| Debian | `trixie`, `bookworm` | `quanvm0501alt1/debian-systemd` | Active Hub push |
+| Fedora | `44`, `43`, `45` | `quanvm0501alt1/fedora-systemd` | Active Hub push |
+| openSUSE Leap | `latest` | `opensuse-systemd` loaded locally | Staging artifact |
 
-Staging artifacts use a placeholder Hub repository. After downloading and
-loading one, it is tagged locally as `<distro>-systemd:<tag>` so it can be run or
-retagged for a future Hub push without requiring credentials in CI.
+The openSUSE staging artifact uses the placeholder Hub repository
+`<DOCKERHUB_USERNAME>/opensuse-systemd`. After downloading and loading it, it is
+tagged locally as `opensuse-systemd:<tag>` so it can be run or retagged for a
+future Hub push without requiring credentials in CI.
 
 ## Published and target tags
 
@@ -35,11 +41,11 @@ retagged for a future Hub push without requiring credentials in CI.
 | Ubuntu | `noble` | `noble`, `24.04` | Active Hub push; LTS |
 | Ubuntu | `jammy` | `jammy`, `22.04` | Active Hub push; LTS |
 | Ubuntu | `stonking` | `stonking`, `26.10`, `rolling` | Active Hub push; interim release |
-| Debian | `trixie` | `trixie`, `13`, `latest`, `stable` | Staging artifact |
-| Debian | `bookworm` | `bookworm`, `12`, `oldstable` | Staging artifact |
-| Fedora | `44` | `44`, `latest` | Staging artifact |
-| Fedora | `43` | `43` | Staging artifact |
-| Fedora | `45` | `45` | Staging artifact |
+| Debian | `trixie` | `trixie`, `13`, `latest`, `stable` | Active Hub push; stable |
+| Debian | `bookworm` | `bookworm`, `12`, `oldstable` | Active Hub push; oldstable |
+| Fedora | `44` | `44`, `latest` | Active Hub push |
+| Fedora | `43` | `43` | Active Hub push |
+| Fedora | `45` | `45` | Active Hub push |
 | openSUSE Leap | `latest` | `leap`, `latest` | Staging artifact for Leap 16 |
 
 openSUSE Leap 16 no longer publishes the separate `systemd-sysvinit` package.
@@ -60,6 +66,20 @@ docker pull quanvm0501alt1/ubuntu-systemd:24.04
 docker pull quanvm0501alt1/ubuntu-systemd:22.04
 docker pull quanvm0501alt1/ubuntu-systemd:rolling
 ```
+
+The active Debian and Fedora images use the same systemd requirements. For
+example:
+
+```bash
+docker pull quanvm0501alt1/debian-systemd:latest
+docker pull quanvm0501alt1/debian-systemd:13
+docker pull quanvm0501alt1/fedora-systemd:latest
+docker pull quanvm0501alt1/fedora-systemd:44
+```
+
+Substitute those image references in the Podman, Docker, Compose, and Molecule
+examples below. The Debian image uses `/sbin/init`; Fedora uses
+`/usr/lib/systemd/systemd` as its image CMD.
 
 ### Podman
 
@@ -156,19 +176,14 @@ Run the scenario with `molecule test`. For Debian use `/sbin/init`; Fedora and
 openSUSE use `/usr/lib/systemd/systemd`. Loaded staging images can be substituted
 in `platforms[].image` after `docker load`.
 
-## Debian, Fedora, and openSUSE staging artifacts
+## openSUSE Leap staging artifact
 
-Staging images are available from the **Artifacts** section of a successful
-workflow run. Each artifact is retained for **3 days** and contains a
-`docker save` tarball with every target tag.
+openSUSE Leap is the remaining staging distribution. Its artifact is available
+from the **Artifacts** section of a successful workflow run, is retained for
+**3 days**, and contains a `docker save` tarball with every target tag.
 
 | Artifact name | Tarball | Loaded tags |
 | --- | --- | --- |
-| `debian-trixie-systemd` | `debian-trixie.tar` | `debian-systemd:trixie`, `:13`, `:latest`, `:stable` |
-| `debian-bookworm-systemd` | `debian-bookworm.tar` | `debian-systemd:bookworm`, `:12`, `:oldstable` |
-| `fedora-44-systemd` | `fedora-44.tar` | `fedora-systemd:44`, `:latest` |
-| `fedora-43-systemd` | `fedora-43.tar` | `fedora-systemd:43` |
-| `fedora-45-systemd` | `fedora-45.tar` | `fedora-systemd:45` |
 | `opensuse-latest-systemd` | `opensuse-latest.tar` | `opensuse-systemd:leap`, `:latest` |
 
 ### Download and load
@@ -178,44 +193,46 @@ Find a recent successful run and download its artifact with GitHub CLI:
 ```bash
 gh run list --workflow auto-build.yml --limit 5
 gh run download <run-id> \
-  --name debian-trixie-systemd \
-  --dir staging/debian-trixie
+  --name opensuse-latest-systemd \
+  --dir staging/opensuse-latest
 
-docker load --input staging/debian-trixie/debian-trixie.tar
-docker image ls debian-systemd
+docker load --input staging/opensuse-latest/opensuse-latest.tar
+docker image ls opensuse-systemd
 ```
 
 You can also download the artifact ZIP from the run's **Artifacts** section in
 the GitHub UI and load the tar file inside it.
 
-Run the loaded staging image with the same systemd requirements as Ubuntu:
+Run the loaded staging image with the same systemd requirements as the active
+images:
 
 ```bash
 docker run -d \
-  --name debian-systemd \
+  --name opensuse-systemd \
   --privileged \
   --cgroupns=host \
   --stop-signal=SIGRTMIN+3 \
   -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
-  debian-systemd:trixie
+  opensuse-systemd:leap
 
-docker exec debian-systemd systemctl is-system-running
+docker exec opensuse-systemd systemctl is-system-running
 ```
 
 ### Promote a staging image later
 
-Authenticate to Docker Hub and retag every desired loaded tag under the eventual
-Hub repository. For example:
+Authenticate to Docker Hub and retag the loaded tags under the eventual Hub
+repository:
 
 ```bash
 docker login
-docker tag debian-systemd:trixie <DOCKERHUB_USERNAME>/debian-systemd:trixie
-docker tag debian-systemd:13 <DOCKERHUB_USERNAME>/debian-systemd:13
-docker push <DOCKERHUB_USERNAME>/debian-systemd:trixie
-docker push <DOCKERHUB_USERNAME>/debian-systemd:13
+docker tag opensuse-systemd:leap <DOCKERHUB_USERNAME>/opensuse-systemd:leap
+docker tag opensuse-systemd:latest <DOCKERHUB_USERNAME>/opensuse-systemd:latest
+docker push <DOCKERHUB_USERNAME>/opensuse-systemd:leap
+docker push <DOCKERHUB_USERNAME>/opensuse-systemd:latest
 ```
 
-The CI itself does not use Docker Hub credentials for staging distributions.
+The CI does not push openSUSE Leap and does not need Docker Hub credentials for
+it.
 
 ## How the automated build works
 
@@ -245,13 +262,16 @@ For every target:
    `tests/test_container.sh`. The test boots the image with `--privileged`, polls
    `systemctl is-system-running` for up to 15 seconds, and accepts `running` or
    `degraded`.
-7. Ubuntu logs in with `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` and pushes every
-   target tag to `quanvm0501alt1/ubuntu-systemd`.
-8. Staging distributions tag the local image as `<distro>-systemd:<tag>`, save a
-   tarball with `docker save`, and upload it as a GitHub Actions artifact with
+7. Ubuntu, Debian, and Fedora log in with `DOCKERHUB_USERNAME` /
+   `DOCKERHUB_TOKEN` and push every target tag to their respective Hub images.
+8. openSUSE Leap tags the local image as `opensuse-systemd:<tag>`, saves a
+   tarball with `docker save`, and uploads it as a GitHub Actions artifact with
    three-day retention.
 9. Only after the push or artifact upload succeeds is that target's digest file
    saved back to the Actions cache. Failed targets retry on the next run.
+10. A final best-effort cleanup step prunes Docker images, Docker build cache,
+    and Podman images. It runs even when the job fails so self-hosted runners do
+    not accumulate storage across weekly ten-target runs.
 
 The state file is written before the build but is only persisted to the cache
 after success. This prevents a failed build from advancing the digest and
@@ -274,11 +294,12 @@ changes before the next upstream digest update.
 
 | Secret | Purpose |
 | --- | --- |
-| `DOCKERHUB_USERNAME` | Docker Hub account for active Ubuntu pushes |
-| `DOCKERHUB_TOKEN` | Docker Hub access token with Ubuntu repository write access |
+| `DOCKERHUB_USERNAME` | Docker Hub account for active image pushes |
+| `DOCKERHUB_TOKEN` | Access token with write access to the Ubuntu, Debian, and Fedora repositories |
 
-Staging targets do not read either secret. The workflow has read-only repository
-permissions and checks out with persisted credentials disabled.
+The openSUSE staging target does not read either secret. The workflow has
+read-only repository permissions and checks out with persisted credentials
+disabled.
 
 ## Repository layout
 
@@ -339,11 +360,11 @@ Useful target arguments:
 | Ubuntu | `library/ubuntu` | `noble` | `quanvm0501alt1/ubuntu-systemd` |
 | Ubuntu | `library/ubuntu` | `jammy` | `quanvm0501alt1/ubuntu-systemd` |
 | Ubuntu | `library/ubuntu` | `stonking` | `quanvm0501alt1/ubuntu-systemd` |
-| Debian | `library/debian` | `trixie` | `<DOCKERHUB_USERNAME>/debian-systemd` |
-| Debian | `library/debian` | `bookworm` | `<DOCKERHUB_USERNAME>/debian-systemd` |
-| Fedora | `library/fedora` | `44` | `<DOCKERHUB_USERNAME>/fedora-systemd` |
-| Fedora | `library/fedora` | `43` | `<DOCKERHUB_USERNAME>/fedora-systemd` |
-| Fedora | `library/fedora` | `45` | `<DOCKERHUB_USERNAME>/fedora-systemd` |
+| Debian | `library/debian` | `trixie` | `quanvm0501alt1/debian-systemd` |
+| Debian | `library/debian` | `bookworm` | `quanvm0501alt1/debian-systemd` |
+| Fedora | `library/fedora` | `44` | `quanvm0501alt1/fedora-systemd` |
+| Fedora | `library/fedora` | `43` | `quanvm0501alt1/fedora-systemd` |
+| Fedora | `library/fedora` | `45` | `quanvm0501alt1/fedora-systemd` |
 | openSUSE Leap | `opensuse/leap` | `latest` | `<DOCKERHUB_USERNAME>/opensuse-systemd` |
 
 `Dockerfile`, `digests/`, and staging tarballs are generated artifacts and are
@@ -368,14 +389,15 @@ manually with `force_build` to publish the change.
 - The images run systemd as root because PID 1 must manage services and cgroups.
 - Only a minimal package set is installed, and package-manager metadata is
   removed in the same layer.
-- Ubuntu tags are updated weekly when the upstream digest changes. If a target
-  fails, its previous Ubuntu image and tags remain published.
-- Staging artifacts are unsigned GitHub Actions artifacts with a three-day
-  retention. Verify their origin before loading or promoting them.
+- Active Ubuntu, Debian, and Fedora tags are updated weekly when their upstream
+  digest changes. If a target fails, its previous Hub image and tags remain
+  published.
+- The openSUSE staging artifact is an unsigned GitHub Actions artifact with a
+  three-day retention. Verify its origin before loading or promoting it.
 - For reproducible production deployments, pin images by digest rather than
   relying on a floating tag.
-- Keep the Docker Hub access token scoped to the Ubuntu repository. Staging jobs
-  do not receive it.
+- Keep the Docker Hub access token scoped to the Ubuntu, Debian, and Fedora
+  repositories. The openSUSE staging job does not receive it.
 
 ## Contributing
 
@@ -394,5 +416,5 @@ Please avoid opening public issues containing credentials or other secrets.
 
 - [ ] Multi-architecture image manifests with native integration testing
 - [ ] Signed staging artifacts and promoted-image provenance
-- [ ] Optional automated Hub publishing for Debian, Fedora, and openSUSE
+- [ ] Optional automated Hub publishing for openSUSE Leap
 - [ ] SBOM generation for every distribution

@@ -269,9 +269,13 @@ For every target:
    three-day retention.
 9. Only after the push or artifact upload succeeds is that target's digest file
    saved back to the Actions cache. Failed targets retry on the next run.
-10. A final best-effort cleanup step prunes Docker images, Docker build cache,
-    and Podman images. It runs even when the job fails so self-hosted runners do
-    not accumulate storage across weekly ten-target runs.
+10. A best-effort cleanup step prunes Docker images, Docker build cache, and
+    Podman images. It runs even when the job fails so self-hosted runners do not
+    accumulate storage across weekly ten-target runs.
+11. The final step deletes the runner's `_work` directory after verifying that
+    `GITHUB_WORKSPACE` is inside a safe work root. This removes checkouts and
+    temporary files from self-hosted runners; GitHub-hosted runners are
+    discarded after each job anyway.
 
 The state file is written before the build but is only persisted to the cache
 after success. This prevents a failed build from advancing the digest and

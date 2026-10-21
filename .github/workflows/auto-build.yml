@@ -231,3 +231,29 @@ jobs:
             echo "Cleaning Podman image storage"
             podman image prune --all --force || true
           fi
+
+      # Delete the runner's _work root last. This is primarily useful for
+      # self-hosted runners, where checkouts and temporary files otherwise
+      # accumulate between jobs; GitHub-hosted runners are discarded anyway.
+      - name: Clean up runner _work directory
+        if: always()
+        continue-on-error: true
+        run: |
+          if [[ -z "${RUNNER_WORKSPACE}" || -z "${GITHUB_WORKSPACE}" ]]; then
+            echo "Refusing to delete an unknown workspace root"
+            exit 0
+          fi
+
+          work_root="$(dirname "${RUNNER_WORKSPACE}")"
+          if [[ -z "${work_root}" || "${work_root}" == "/" ]]; then
+            echo "Refusing to delete unsafe workspace root: '${work_root}'"
+            exit 0
+          fi
+          if [[ "${GITHUB_WORKSPACE}" != "${work_root}/"* ]]; then
+            echo "Refusing to delete ${work_root}: GITHUB_WORKSPACE is not inside it"
+            exit 0
+          fi
+
+          cd /
+          echo "Deleting runner workspace root ${work_root}"
+          rm -rf -- "${work_root}"

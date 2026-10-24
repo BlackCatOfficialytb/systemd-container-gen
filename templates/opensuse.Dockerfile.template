@@ -28,4 +28,24 @@ RUN systemctl set-default multi-user.target \
 VOLUME [ "/sys/fs/cgroup" ]
 STOPSIGNAL SIGRTMIN+3
 
+# Make the runtime requirements visible to anyone who opens an interactive
+# shell in the container. openSUSE sources this local file from /etc/bash.bashrc.
+# The staging artifact is loaded locally as opensuse-systemd, so use that name
+# in the banner instead of the placeholder Hub target.
+RUN printf '%s\n' \
+        '' \
+        'case "$-" in *i*)' \
+        'echo "============================================================"' \
+        'echo " systemd container: start this image with systemd support."' \
+        'echo " Published tags: {{TARGET_TAGS}}"' \
+        'echo " Podman:"' \
+        'echo "    podman run -it --security-opt label=disable --systemd=always opensuse-systemd:{{BASE_TAG}}"' \
+        'echo " Docker:"' \
+        'echo "    docker run -d --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw opensuse-systemd:{{BASE_TAG}}"' \
+        'echo " Open a shell with: <podman|docker> exec -it <container> bash"' \
+        'echo "============================================================"' \
+        "''" \
+        'esac' \
+    >> /etc/bash.bashrc.local
+
 CMD [ "/usr/lib/systemd/systemd" ]

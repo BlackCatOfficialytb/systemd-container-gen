@@ -32,4 +32,22 @@ RUN systemctl mask \
 VOLUME [ "/sys/fs/cgroup" ]
 STOPSIGNAL SIGRTMIN+3
 
+# Make the runtime requirements visible to anyone who opens an interactive
+# shell in the container. Fedora reads this file for Bash shells.
+RUN printf '%s\n' \
+        '' \
+        'case "$-" in *i*)' \
+        'echo "============================================================"' \
+        'echo " systemd container: start this image with systemd support."' \
+        'echo " Published tags: {{TARGET_TAGS}}"' \
+        'echo " Podman:"' \
+        'echo "    podman run -it --security-opt label=disable --systemd=always {{IMAGE_NAME}}:{{BASE_TAG}}"' \
+        'echo " Docker:"' \
+        'echo "    docker run -d --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw {{IMAGE_NAME}}:{{BASE_TAG}}"' \
+        'echo " Open a shell with: <podman|docker> exec -it <container> bash"' \
+        'echo "============================================================"' \
+        "''" \
+        'esac' \
+    >> /etc/bashrc
+
 CMD [ "/usr/lib/systemd/systemd" ]

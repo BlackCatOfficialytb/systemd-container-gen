@@ -1,14 +1,36 @@
-FROM opensuse/leap
+FROM opensuse/tumbleweed
 
 # Install systemd and basic necessities
 RUN zypper in -y --no-recommends systemd git curl ca-certificates coreutils util-linux procps
-# Or for Tumbleweed use: zypper in -y systemd
 RUN zypper ref
-RUN zypper dup -y
+RUN zypper dup -y --with-essential
 RUN zypper in -y --no-recommends systemd opensystemd initscripts hostname ifplugd \
     networkmanager dbus polkit iputils \
     glibc-core glibc-devel glibc-utils
 RUN zypper in -y coreutils file --namespace systemd
 
 # Set the default target to multi-user.target
-CMD ["/sbin/init"]
+RUN systemctl set-default multi-user.target \
+    && rm -f /var/lib/dbus/machine-id \
+    && : > /etc/machine-id
+
+VOLUME [ "/sys/fs/cgroup" ]
+STOPSIGNAL SIGRTMIN+3
+
+RUN printf '%s\n' \
+        '' \
+        'case "$-" in *i*)' \
+        'echo "============================================================"' \
+        'echo " systemd container: start this image with systemd support."' \
+        'echo " Published tags: {{TARGET_TAGS}}"' \
+        'echo " Podman:"' \
+        'echo "    podman run -it --security-opt label=disable --systemd=always opensuse-tumbleweed-systemd:{{BASE_TAG}}"' \
+        'echo " Docker:"' \
+        'echo "    docker run -d --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw opensuse-tumbleweed-systemd:{{BASE_TAG}}"' \
+        'echo " Open a shell with: <podman|docker> exec -it <container> bash"' \
+        'echo "============================================================"' \
+        '' \
+        'esac' \
+    >> /etc/bash.bashrc.local
+
+CMD [ "/sbin/init" ]

@@ -97,30 +97,42 @@ jobs:
       STAGING_IMAGE: ${{ matrix.distro }}-systemd
 
     steps:
+      # The runner cannot download remote actions, so every step below uses
+      # plain shell instead of `uses:`.
       - name: Check out repository
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
+        run: |
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git clone --depth 1 --branch "${GITHUB_REF_NAME}" \
+            "https://github.com/${GITHUB_REPOSITORY}.git" "${GITHUB_WORKSPACE}"
 
-      - name: Set up Python
-        uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
+      - name: Require python3
+        run: |
+          if ! command -v python3 >/dev/null 2>&1; then
+            echo "error: python3 is not installed on this runner" >&2
+            exit 1
+          fi
+          python3 --version
 
-      # Cache entries are immutable, so restore the newest state for this target
-      # with a prefix key and save a new run-specific key after a successful push
-      # or artifact upload.
-      - name: Restore upstream digest cache
-        uses: actions/cache/restore@v6
-        with:
-          path: digests/${{ matrix.distro }}_${{ matrix.upstream_tag }}.txt
-          key: ${{ runner.os }}-systemd-${{ matrix.distro }}-${{ matrix.upstream_tag }}-digest-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: |
-            ${{ runner.os }}-systemd-${{ matrix.distro }}-${{ matrix.upstream_tag }}-digest-
+      # The runner image may ship Docker or Podman (or both). Pick one CLI and
+      # use it consistently for the build, test, tag, and save steps below.
+      - name: Detect container CLI
+        id: cli
+        run: |
+          if command -v docker >/dev/null 2>&1; then
+            echo "command=docker" >> "$GITHUB_OUTPUT"
+          elif command -v podman >/dev/null 2>&1; then
+            echo "command=podman" >> "$GITHUB_OUTPUT"
+          else
+            echo "error: neither docker nor podman is installed" >&2
+            exit 1
+          fi
 
       - name: Check upstream digest and render Dockerfile
         id: check
         env:
+          # Keep digest state in $HOME: the checkout directory is cleaned after
+          # every job, so actions/cache cannot be used either.
+          DIGEST_STATE_DIR: "${HOME}/.cache/systemd-image-digests"
           FORCE_BUILD: ${{ inputs.force_build || 'false' }}
           DISTRO: ${{ matrix.distro }}
           UPSTREAM_REPO: ${{ matrix.upstream_repo }}
@@ -139,82 +151,102 @@ jobs:
           fi
           python3 scripts/check_and_render.py "${args[@]}"
 
-      - name: Set up Docker Buildx
-        if: steps.check.outputs.should_build == 'true'
-        uses: docker/setup-buildx-action@v4
-
+      # Buildx is a Docker-only feature; keep the build simple with the classic
+      # builder so the same command shape works for both CLIs.
       - name: Build image locally
         if: steps.check.outputs.should_build == 'true'
+        env:
+          CONTAINER_CLI: ${{ steps.cli.outputs.command }}
         run: |
-          docker buildx build \
-            --pull \
-            --load \
-            --file Dockerfile \
-            --tag "${LOCAL_IMAGE}" \
-            .
+          if [[ "${CONTAINER_CLI}" == "docker" ]]; then
+            docker build \
+              --pull \
+              --file Dockerfile \
+              --tag "${LOCAL_IMAGE}" \
+              .
+          else
+            podman build \
+              --pull \
+              --file Dockerfile \
+              --tag "${LOCAL_IMAGE}" \
+              .
+          fi
 
       - name: Run systemd integration test
         if: steps.check.outputs.should_build == 'true'
-        run: bash tests/test_container.sh "${LOCAL_IMAGE}"
+        env:
+          CONTAINER_CLI: ${{ steps.cli.outputs.command }}
+        run: CONTAINER_CLI="${CONTAINER_CLI}" bash tests/test_container.sh "${LOCAL_IMAGE}"
 
       - name: Log in to Docker Hub
         if: steps.check.outputs.should_build == 'true' && matrix.push_to_hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        env:
+          CONTAINER_CLI: ${{ steps.cli.outputs.command }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          printf '%s' "${DOCKERHUB_TOKEN}" | "${CONTAINER_CLI}" login docker.io \
+            --username "${DOCKERHUB_USERNAME}" \
+            --password-stdin
 
       - name: Push active Hub tags
         if: steps.check.outputs.should_build == 'true' && matrix.push_to_hub
         env:
+          CONTAINER_CLI: ${{ steps.cli.outputs.command }}
           TARGET_IMAGE: ${{ matrix.target_image }}
           TARGET_TAGS: ${{ steps.check.outputs.target_tags }}
         run: |
           IFS=',' read -ra target_tags <<< "${TARGET_TAGS}"
           for target_tag in "${target_tags[@]}"; do
-            docker tag "${LOCAL_IMAGE}" "${TARGET_IMAGE}:${target_tag}"
+            "${CONTAINER_CLI}" tag "${LOCAL_IMAGE}" "${TARGET_IMAGE}:${target_tag}"
             echo "Pushing ${TARGET_IMAGE}:${target_tag}"
-            docker push "${TARGET_IMAGE}:${target_tag}"
+            "${CONTAINER_CLI}" push "${TARGET_IMAGE}:${target_tag}"
           done
 
       - name: Save staging image tarball
         if: steps.check.outputs.should_build == 'true' && !matrix.push_to_hub
         env:
+          CONTAINER_CLI: ${{ steps.cli.outputs.command }}
+          # The runner cannot download remote actions, so actions/upload-artifact
+          # is unavailable. Keep the tarball on the runner under $HOME instead;
+          # the staging directory persists across runs alongside the digest
+          # state and is cleaned by the retention step below.
+          STAGING_DIR: "${HOME}/.cache/systemd-image-staging"
           TARGET_TAGS: ${{ steps.check.outputs.target_tags }}
         run: |
+          mkdir -p "${STAGING_DIR}"
           IFS=',' read -ra target_tags <<< "${TARGET_TAGS}"
           image_refs=()
           for target_tag in "${target_tags[@]}"; do
             image_ref="${STAGING_IMAGE}:${target_tag}"
-            docker tag "${LOCAL_IMAGE}" "${image_ref}"
+            "${CONTAINER_CLI}" tag "${LOCAL_IMAGE}" "${image_ref}"
             image_refs+=("${image_ref}")
           done
-          docker save --output "${TARBALL}" "${image_refs[@]}"
-          ls -lh "${TARBALL}"
+          "${CONTAINER_CLI}" save --output "${STAGING_DIR}/${TARBALL}" "${image_refs[@]}"
+          # Drop tarballs older than 7 days so the staging directory cannot
+          # grow without bound on a long-lived runner.
+          find "${STAGING_DIR}" -name '*.tar' -mtime +7 -delete
+          ls -lh "${STAGING_DIR}/${TARBALL}"
 
-      - name: Upload staging artifact
-        if: steps.check.outputs.should_build == 'true' && !matrix.push_to_hub
-        # v4/v5 still target Node 20; keep this on the Node 24 action line.
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.distro }}-${{ matrix.upstream_tag }}-systemd
-          path: ${{ matrix.distro }}-${{ matrix.upstream_tag }}.tar
-          retention-days: 3
-          if-no-files-found: error
-
-      # The digest file is written before the build, but only persist it after
-      # the image has passed tests and every tag or artifact is complete. A failed
-      # target must not advance its cached digest and skip a needed rebuild.
-      - name: Save upstream digest cache
-        if: success() && steps.check.outputs.should_build == 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: digests/${{ matrix.distro }}_${{ matrix.upstream_tag }}.txt
-          key: ${{ runner.os }}-systemd-${{ matrix.distro }}-${{ matrix.upstream_tag }}-digest-${{ github.run_id }}-${{ github.run_attempt }}
+      # The digest file was written before the build, but it lives in $HOME and
+      # persists on the runner, so a failed target would cause later runs to
+      # skip a needed rebuild. Rewind it unless the image passed tests and all
+      # tags or artifacts are complete.
+      - name: Rewind digest on failure
+        if: failure() && steps.check.outputs.should_build == 'true'
+        env:
+          DIGEST_STATE_DIR: "${HOME}/.cache/systemd-image-digests"
+          DISTRO: ${{ matrix.distro }}
+          UPSTREAM_TAG: ${{ matrix.upstream_tag }}
+        run: |
+          state_file="${DIGEST_STATE_DIR}/${DISTRO}_${UPSTREAM_TAG}.txt"
+          # The digest was rotated by the check step before the build; delete
+          # the entry on failure so the next run rebuilds.
+          rm -f -- "${state_file}"
 
       # GitHub-hosted runners are discarded after the job, but self-hosted
       # Docker/Podman runners can accumulate many GB across ten targets. Clean
-      # the local stores after the upload/push and cache save, even on failure.
+      # the local stores after the upload/push steps, even on failure.
       - name: Clean Docker and Podman image storage
         if: always()
         continue-on-error: true
@@ -232,10 +264,17 @@ jobs:
             podman image prune --all --force || true
           fi
 
-      # Delete the runner's _work root last. This is primarily useful for
+      # Delete this job's workspace checkout last. This is primarily useful for
       # self-hosted runners, where checkouts and temporary files otherwise
       # accumulate between jobs; GitHub-hosted runners are discarded anyway.
-      - name: Clean up runner _work directory
+      #
+      # Only the checkout directory (RUNNER_WORKSPACE/GITHUB_WORKSPACE) is
+      # removed. The parent _work root must NEVER be deleted: it contains
+      # _actions, the runner's cache of downloaded actions (actions/checkout,
+      # actions/setup-python, ...). Removing it makes every subsequent job fail
+      # with "Can't find 'action.yml', 'action.yaml' or 'Dockerfile' under
+      # /home/runner/work/_actions/...".
+      - name: Clean up runner workspace directory
         if: always()
         continue-on-error: true
         run: |
@@ -243,17 +282,21 @@ jobs:
             echo "Refusing to delete an unknown workspace root"
             exit 0
           fi
-
-          work_root="$(dirname "${RUNNER_WORKSPACE}")"
-          if [[ -z "${work_root}" || "${work_root}" == "/" ]]; then
-            echo "Refusing to delete unsafe workspace root: '${work_root}'"
+          if [[ "${GITHUB_WORKSPACE}" != "${RUNNER_WORKSPACE}"* ]]; then
+            echo "Refusing to delete ${RUNNER_WORKSPACE}: GITHUB_WORKSPACE is not inside it"
             exit 0
           fi
-          if [[ "${GITHUB_WORKSPACE}" != "${work_root}/"* ]]; then
-            echo "Refusing to delete ${work_root}: GITHUB_WORKSPACE is not inside it"
-            exit 0
-          fi
+          case "${RUNNER_WORKSPACE}" in
+            "/"|""|"."|..*)
+              echo "Refusing to delete unsafe workspace root: '${RUNNER_WORKSPACE}'"
+              exit 0
+              ;;
+            *"_actions"*)
+              echo "Refusing to delete the actions cache: '${RUNNER_WORKSPACE}'"
+              exit 0
+              ;;
+          esac
 
           cd /
-          echo "Deleting runner workspace root ${work_root}"
-          rm -rf -- "${work_root}"
+          echo "Deleting runner workspace directory ${RUNNER_WORKSPACE}"
+          rm -rf -- "${RUNNER_WORKSPACE}"

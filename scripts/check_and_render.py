@@ -186,6 +186,20 @@ def fetch_manifest_digest(repository, tag, token):
     return digest
 
 
+def digest_state_root():
+    """Directory holding the per-target digest state files.
+
+    Defaults to <repo>/digests. The workflow sets DIGEST_STATE_DIR when the
+    checkout directory is ephemeral (for example a self-hosted runner whose
+    workspace is cleaned after every job) so state persists in $HOME instead
+    of needing actions/cache.
+    """
+    configured = os.environ.get("DIGEST_STATE_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+    return REPOSITORY_ROOT / "digests"
+
+
 def read_digest(path):
     """Read a previous digest, returning an empty string when none exists."""
     try:
@@ -259,9 +273,7 @@ def run(args):
     repository = normalize_repository(args.upstream_repo)
     base_image = base_image_for(repository)
     target_tags = ",".join(tags)
-    state_path = (
-        REPOSITORY_ROOT / "digests" / f"{args.distro}_{args.upstream_tag}.txt"
-    )
+    state_path = digest_state_root() / f"{args.distro}_{args.upstream_tag}.txt"
     previous_digest = read_digest(state_path)
 
     print(f"Checking {repository}:{args.upstream_tag}")

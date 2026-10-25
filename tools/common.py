@@ -16,6 +16,8 @@ DISTRO_REPOS = {
     "debian": "library/debian",
     "fedora": "library/fedora",
     "opensuse": "opensuse/leap",
+    "arch": "library/archlinux",
+    "opensuse-tumbleweed": "opensuse/tumbleweed",
 }
 TEST_SCRIPT = REPO_ROOT / "tests" / "test_container.sh"
 

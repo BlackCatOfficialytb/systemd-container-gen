@@ -84,6 +84,16 @@ jobs:
             upstream_tag: latest
             target_image: "<DOCKERHUB_USERNAME>/opensuse-systemd"
             push_to_hub: false
+          - distro: opensuse-tumbleweed
+            upstream_repo: opensuse/tumbleweed
+            upstream_tag: latest
+            target_image: "<DOCKERHUB_USERNAME>/opensuse-tumbleweed-systemd"
+            push_to_hub: false
+          - distro: arch
+            upstream_repo: library/archlinux
+            upstream_tag: latest
+            target_image: "<DOCKERHUB_USERNAME>/arch-systemd"
+            push_to_hub: false
 
     # Matrix entries may run in parallel, but two runs for the same target must
     # never publish or upload over each other.

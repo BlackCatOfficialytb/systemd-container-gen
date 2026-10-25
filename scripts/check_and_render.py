@@ -53,6 +53,12 @@ TARGET_TAGS = {
     "opensuse": {
         "latest": ("leap", "latest"),
     },
+    "opensuse-tumbleweed": {
+        "latest": ("tumbleweed", "rolling"),
+    },
+    "arch": {
+        "latest": ("latest",),
+    },
 }
 
 # Docker Hub exposes multi-platform images through manifest lists or OCI image

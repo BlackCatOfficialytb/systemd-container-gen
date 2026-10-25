@@ -1,0 +1,14 @@
+FROM opensuse/leap
+
+# Install systemd and basic necessities
+RUN zypper in -y --no-recommends systemd git curl ca-certificates coreutils util-linux procps
+# Or for Tumbleweed use: zypper in -y systemd
+RUN zypper ref
+RUN zypper dup -y
+RUN zypper in -y --no-recommends systemd opensystemd initscripts hostname ifplugd \
+    networkmanager dbus polkit iputils \
+    glibc-core glibc-devel glibc-utils
+RUN zypper in -y coreutils file --namespace systemd
+
+# Set the default target to multi-user.target
+CMD ["/sbin/init"]

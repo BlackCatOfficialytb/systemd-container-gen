@@ -1,0 +1,31 @@
+FROM archlinux:latest
+
+# Install systemd and boot toolchain
+RUN pacman -Sy --noconfirm systemd initscripts basicutil coreutils bash curl \
+    iproute2 iputils openssh bash-completion pacman-file >/dev/null
+
+# Systemd now provides the init system; set default target to multi-user
+RUN systemctl set-default multi-user.target \
+    && rm -f /etc/machine-id \
+    && : > /etc/machine-id
+
+VOLUME [ "/sys/fs/cgroup" ]
+STOPSIGNAL SIGRTMIN+3
+
+RUN printf '%s\n' \
+        '' \
+        'case "$-" in *i*)' \
+        'echo "============================================================"' \
+        'echo " systemd container: start this image with systemd support."' \
+        'echo " Published tags: {{TARGET_TAGS}}"' \
+        'echo " Podman:"' \
+        'echo "    podman run -it --security-opt label=disable --systemd=always arch-systemd:{{BASE_TAG}}"' \
+        'echo " Docker:"' \
+        'echo "    docker run -d --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw arch-systemd:{{BASE_TAG}}"' \
+        'echo " Open a shell with: <podman|docker> exec -it <container> bash"' \
+        'echo "============================================================"' \
+        '' \
+        'esac' \
+    >> /etc/bash.bashrc.local
+
+CMD [ "/usr/lib/systemd/systemd" ]
